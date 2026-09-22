@@ -268,13 +268,13 @@ canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel
 canvas.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(1.4, Math.min(8, dist * Math.exp(e.deltaY * 0.001))); }, { passive:false });
 
 // ================= 狀態 =================
-let source = null, video = null, stream = null, recording = true, solid = false, playing = false;
+let mirrorCam = true, source = null, video = null, stream = null, recording = true, solid = false, playing = false;
 let frameTick = 0, playT = 0, lastT = performance.now();
 
 function render(now){
   const dt = (now - lastT) / 1000; lastT = now;
   if (source === "cam" && recording && video.readyState >= 2){
-    if (frameTick++ % +$("every").value === 0) pushFrame(video, true);
+    if (frameTick++ % +$("every").value === 0) pushFrame(video, mirrorCam);
   }
   if (playing){
     playT += dt * 0.25;
@@ -329,8 +329,11 @@ function begin(kind){
 }
 $("cam").onclick = async () => {
   $("msg").textContent = "";
-  try { stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user", width:{ ideal:640 } }, audio:false }); }
+  try { stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:"environment" }, width:{ ideal:640 } }, audio:false }); }
   catch (e){ $("msg").textContent = "鏡頭沒有開啟：這個頁面可能沒有相機權限。可以改用上傳影片，或把網頁檔案直接用瀏覽器打開。"; return; }
+  // 後鏡頭不鏡像；電腦的視訊鏡頭（前鏡頭）才左右翻轉
+  const fm = stream.getVideoTracks()[0].getSettings().facingMode;
+  mirrorCam = fm !== "environment";
   video = document.createElement("video");
   video.playsInline = true; video.muted = true; video.srcObject = stream;
   await video.play();
