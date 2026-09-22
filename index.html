@@ -36,8 +36,8 @@ body{
   margin:0 0 34px; white-space:nowrap;
 }
 #intro #cam{
-  width:180px; height:60px; border-radius:10px; background:#fff; color:#313131; box-shadow:none;
-  font-family:inherit; font-size:20px; letter-spacing:.1em; padding:0 0 0 .1em;
+  width:135px; height:45px; border-radius:7.5px; background:#fff; color:#313131; box-shadow:none;
+  font-family:inherit; font-size:15px; letter-spacing:.1em; padding:0 0 0 .1em;
 }
 #intro #cam:active{transform:translateY(1px)}
 #msg{color:#9a978f; min-height:1.4em; font-size:10px; line-height:1.8; margin:24px 0 0; max-width:28em; text-align:center}
@@ -239,7 +239,7 @@ function setSize(w, h){
 
 // ================= 視角操作 =================
 let yaw = 0.75, pitch = 0.32, dist = 3.3;
-let depth = 1.1, depth0 = 1.1, cutV = 1;       // 厚度、切面（1 = 最前方）
+let depth = 0.55, depth0 = 0.55, cutV = 1;       // 厚度、切面（1 = 最前方）
 const FRAME_A = 0.20, SLICE_A = 0.65;           // 每幀 20%、切片 65%
 const pointers = new Map(); let pinch0 = 0, dist0 = 0;
 canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
@@ -249,11 +249,11 @@ canvas.addEventListener("pointermove", e => {
   const p = pointers.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
   if (pointers.size === 1){ yaw -= dx * 0.008; pitch = Math.max(-1.45, Math.min(1.45, pitch + dy * 0.008)); }
-  else if (pointers.size === 2){ const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x-b.x, a.y-b.y); if (pinch0) depth = Math.max(0.15, Math.min(3.5, depth0 * d / pinch0)); }   // 雙指張開＝變厚，捏合＝變薄
+  else if (pointers.size === 2){ const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x-b.x, a.y-b.y); if (pinch0) depth = Math.max(0.075, Math.min(1.75, depth0 * d / pinch0)); }   // 雙指張開＝變厚，捏合＝變薄
 });
 const up = e => { pointers.delete(e.pointerId); pinch0 = 0; };
 canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
-canvas.addEventListener("wheel", e => { e.preventDefault(); depth = Math.max(0.15, Math.min(3.5, depth * Math.exp(-e.deltaY * 0.001))); }, { passive:false });
+canvas.addEventListener("wheel", e => { e.preventDefault(); depth = Math.max(0.075, Math.min(1.75, depth * Math.exp(-e.deltaY * 0.001))); }, { passive:false });
 
 // ================= 狀態 =================
 let mirrorCam = true, source = null, video = null, stream = null, recording = true, solid = false, playing = false;
@@ -276,7 +276,7 @@ function render(now){
 
   if (tex && filled){
     const cut = cutV;
-    const asp = TW / TH, sx = 1.5, size = [sx, sx / asp, depth];
+    const asp = TW / TH, sx = 0.75, size = [sx, sx / asp, depth];
     const cam = [dist*Math.cos(pitch)*Math.sin(yaw), dist*Math.sin(pitch), dist*Math.cos(pitch)*Math.cos(yaw)];
     const mvp = mul(perspective(0.7, w / h, 0.05, 50), lookAt(cam, [0,0,0], [0,1,0]));
 
