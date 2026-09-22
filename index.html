@@ -247,7 +247,7 @@ function setSize(w, h){
 
 // ================= 視角操作 =================
 let yaw = 0.75, pitch = 0.32, dist = 3.3;
-let depth = 0.55, depth0 = 0.55, cutV = 1;       // 厚度、切面（1 = 最前方）
+let depth = 1.1, depth0 = 1.1, cutV = 1;       // 厚度、切面（1 = 最前方）
 const FRAME_A = 0.20, SLICE_A = 0.65;           // 每幀 20%、切片 65%
 const pointers = new Map(); let pinch0 = 0, dist0 = 0;
 canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
@@ -264,7 +264,7 @@ canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel
 canvas.addEventListener("wheel", e => { e.preventDefault(); depth = Math.max(0.075, Math.min(1.75, depth * Math.exp(-e.deltaY * 0.001))); }, { passive:false });
 
 // ================= 狀態 =================
-let mirrorCam = true, source = null, video = null, stream = null, recording = true, solid = false, playing = false;
+let useRVFC = false, lastPush = 0, mirrorCam = true, source = null, video = null, stream = null, recording = true, solid = false, playing = false;
 let frameTick = 0, playT = 0, lastT = performance.now();
 
 // ================= 頂點的 time code =================
@@ -298,8 +298,9 @@ function placeLabels(mvp, size){
 
 function render(now){
   const dt = (now - lastT) / 1000; lastT = now;
-  if (source === "cam" && recording && video.readyState >= 2){
-    pushFrame(video, mirrorCam);
+  // 不支援 requestVideoFrameCallback 的瀏覽器：每秒最多存 30 幀
+  if (!useRVFC && source === "cam" && recording && video.readyState >= 2 && now - lastPush >= 1000 / 30 - 2){
+    lastPush = now; pushFrame(video, mirrorCam);
   }
   if (playing){
     playT += dt * 0.25;
@@ -313,9 +314,14 @@ function render(now){
 
   if (tex && filled){
     const cut = cutV;
-    const asp = TW / TH, sx = 0.75, size = [sx, sx / asp, depth];
-    const cam = [dist*Math.cos(pitch)*Math.sin(yaw), dist*Math.sin(pitch), dist*Math.cos(pitch)*Math.cos(yaw)];
-    const mvp = mul(perspective(0.7, w / h, 0.05, 50), lookAt(cam, [0,0,0], [0,1,0]));
+    // 方塊隨錄製長厚：錄到幾幀就有幾幀的厚度，存滿 N 幀時才是完整厚度
+    const asp = TW / TH, sx = 0.75, grown = depth * Math.max(1, filled) / N;
+    const size = [sx, sx / asp, grown];
+    const off = (depth - grown) / 2;                     // 正面固定不動，往後方長出來
+    const eye = [dist*Math.cos(pitch)*Math.sin(yaw), dist*Math.sin(pitch), dist*Math.cos(pitch)*Math.cos(yaw)];
+    const model = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,off,1];
+    const mvp = mul(perspective(0.7, w / h, 0.05, 50), mul(lookAt(eye, [0,0,0], [0,1,0]), model));
+    const cam = [eye[0], eye[1], eye[2] - off];          // 鏡頭位置換算到方塊自己的座標
 
     gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);               // 畫背面，鏡頭進到方塊裡也看得到
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -362,6 +368,16 @@ $("cam").onclick = async () => {
   await video.play();
   setSize(video.videoWidth, video.videoHeight);
   begin("cam");
+  // 鏡頭每產生一幀新畫面才存一次，跟螢幕更新率、畫面卡不卡無關
+  useRVFC = "requestVideoFrameCallback" in video;
+  if (useRVFC){
+    const onFrame = () => {
+      if (source !== "cam") return;
+      if (recording) pushFrame(video, mirrorCam);
+      video.requestVideoFrameCallback(onFrame);
+    };
+    video.requestVideoFrameCallback(onFrame);
+  }
 };
 
 if (gl){ initGL(); requestAnimationFrame(render); }
