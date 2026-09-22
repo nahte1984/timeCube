@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>時間方塊 xy + t</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif&display=swap">
+<style>
+:root{
+  --bg:#E3E1DC; --ink:#1A1C1F; --faint:#77756F; --hit:#3D7BFF; --panel:rgba(227,225,220,.94); --line:rgba(26,28,31,.14);
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#0B0C0E; --ink:#E7E4DD; --faint:#6C6A65; --hit:#7FA6FF; --panel:rgba(11,12,14,.94); --line:rgba(231,228,221,.12); }
+}
+:root[data-theme="dark"]{ --bg:#0B0C0E; --ink:#E7E4DD; --faint:#6C6A65; --hit:#7FA6FF; --panel:rgba(11,12,14,.94); --line:rgba(231,228,221,.12); }
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{
+  background:#0B0C0E; color:var(--ink);
+  font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+#stage{flex:1; min-height:0; position:relative}
+#gl{position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; display:block}
+#gl:active{cursor:grabbing}
+#intro{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background:var(--bg); text-align:center; padding:24px;
+}
+#intro > div{max-width:34em}
+#intro h1{font-family:"Instrument Serif",Georgia,serif; font-weight:400; font-size:clamp(44px,10vw,84px); margin:0 0 6px; line-height:1}
+#intro h1 i{font-style:italic; color:var(--faint)}
+#intro p{font-size:14px; line-height:1.7; color:var(--faint); margin:12px 0 22px}
+#msg{color:var(--hit); min-height:1.4em; font-size:13px}
+.btns{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+button,.upload{
+  font:inherit; font-size:13px; color:var(--bg); background:var(--ink);
+  border:0; border-radius:999px; padding:8px 14px; cursor:pointer; display:inline-block; position:relative;
+}
+#intro button,#intro .upload{font-size:14px; padding:10px 18px}
+.ghost{background:transparent; color:var(--ink); box-shadow:inset 0 0 0 1px var(--ink)}
+button[aria-pressed="true"]{background:var(--hit); color:#0B0C0E; box-shadow:none}
+button:focus-visible,.upload:focus-within,input:focus-visible{outline:2px solid var(--hit); outline-offset:3px}
+.upload input{position:absolute; width:1px; height:1px; opacity:0}
+#hud{position:absolute; left:14px; top:12px; font-size:12px; color:#9a978f; pointer-events:none; line-height:1.6}
+footer{
+  display:none; background:var(--panel); border-top:1px solid var(--line);
+  padding:10px clamp(12px,3vw,24px) 12px; gap:8px 16px; flex-wrap:wrap; align-items:center; font-size:12px; color:var(--faint);
+}
+body.on footer{display:flex}
+body.on #intro{display:none}
+.sl{display:flex; align-items:center; gap:10px; flex:1; min-width:210px}
+.sl span{min-width:3.5em}
+.sl output{min-width:4.2em; text-align:right; color:var(--ink)}
+body.solid .alpha{display:none}
+input[type=range]{flex:1; accent-color:var(--hit)}
+.row{display:flex; gap:8px; flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl"></canvas>
+  <div id="hud"></div>
+  <div id="intro"><div>
+    <h1>時間方塊 <i>xy + t</i></h1>
+    <p>把影片的每一幀疊成 z 軸，整段時間變成一塊有厚度的方塊。拖曳旋轉，切面可以逐幀穿過時間，側面會露出每一條像素隨時間的軌跡。</p>
+    <div class="btns">
+      <button id="cam">開啟鏡頭</button>
+      <label class="upload ghost">上傳影片<input id="file" type="file" accept="video/*"></label>
+    </div>
+    <p id="msg"></p>
+  </div></div>
+</div>
+<footer>
+  <label class="sl"><span>切面</span><input id="cut" type="range" min="0" max="1000" value="1000"></label>
+  <label class="sl"><span>厚度</span><input id="depth" type="range" min="20" max="300" value="110"></label>
+  <label class="sl alpha"><span>每幀</span><input id="frameA" type="range" min="0" max="100" value="20" aria-label="每一幀的不透明度"><output id="frameAv">20%</output></label>
+  <label class="sl alpha"><span>切片</span><input id="sliceA" type="range" min="0" max="100" value="80" aria-label="切片的不透明度"><output id="sliceAv">80%</output></label>
+  <label class="sl alpha"><span>層距</span><input id="stride" type="range" min="1" max="12" value="1" aria-label="每幾幀畫一層"><output id="strideV">每 1 幀</output></label>
+  <label class="sl" id="stepRow"><span>取樣</span><input id="every" type="range" min="1" max="8" value="1" aria-label="每幾幀取一幀，越大涵蓋的時間越長"></label>
+  <div class="row">
+    <button id="play" class="ghost" aria-pressed="false">播放切面</button>
+    <button id="mode" class="ghost">實心方塊</button>
+    <button id="rec" class="ghost" aria-pressed="true">錄製中</button>
+    <button id="back" class="ghost">換來源</button>
+  </div>
+</footer>
+
+<script>
+// ================= 設定 =================
+const N = 120;            // 疊幾幀（z 軸深度）
+const TW = 192;           // 每幀的寬（像素）
+let TH = 144;
+
+const $ = id => document.getElementById(id);
+const canvas = $("gl");
+const gl = canvas.getContext("webgl2", { antialias:true, premultipliedAlpha:true });
+if (!gl) $("msg").textContent = "這個瀏覽器不支援 WebGL2，請改用新版 Chrome、Edge 或 Safari。";
+
+// ================= 小型矩陣工具 =================
+function perspective(fov, asp, n, f){
+  const t = 1 / Math.tan(fov / 2), nf = 1 / (n - f);
+  return [t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)*nf,-1, 0,0,2*f*n*nf,0];
+}
+function lookAt(e, c, u){
+  let z = [e[0]-c[0], e[1]-c[1], e[2]-c[2]]; let l = Math.hypot(...z); z = z.map(v => v/l);
+  let x = [u[1]*z[2]-u[2]*z[1], u[2]*z[0]-u[0]*z[2], u[0]*z[1]-u[1]*z[0]]; l = Math.hypot(...x); x = x.map(v => v/l);
+  const y = [z[1]*x[2]-z[2]*x[1], z[2]*x[0]-z[0]*x[2], z[0]*x[1]-z[1]*x[0]];
+  return [x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0,
+    -(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]), -(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]), -(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]), 1];
+}
+function mul(a, b){
+  const o = new Array(16);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++){
+    let s = 0; for (let k = 0; k < 4; k++) s += a[k*4 + j] * b[i*4 + k]; o[i*4 + j] = s;
+  }
+  return o;
+}
+
+// ================= Shader =================
+const VS = `#version 300 es
+in vec3 aPos; uniform mat4 uMVP; uniform vec3 uSize; out vec3 vObj;
+void main(){ vObj = aPos * uSize; gl_Position = uMVP * vec4(vObj, 1.0); }`;
+
+const FS = `#version 300 es
+precision highp float; precision highp sampler3D;
+in vec3 vObj; out vec4 outColor;
+uniform sampler3D uTex; uniform vec3 uCam, uSize;
+uniform float uCut, uHead, uFilled, uN, uMode, uFrameA, uSliceA, uStride;
+
+vec2 hitBox(vec3 ro, vec3 rd, vec3 bmin, vec3 bmax){
+  vec3 inv = 1.0 / rd;
+  vec3 t0 = (bmin - ro) * inv, t1 = (bmax - ro) * inv;
+  vec3 tn = min(t0, t1), tf = max(t0, t1);
+  return vec2(max(max(tn.x, tn.y), max(tn.z, 0.0)), min(min(tf.x, tf.y), tf.z));
+}
+// 方塊內的位置 → 哪一幀的哪個像素
+vec3 sampleAt(vec3 p){
+  vec3 q = p / uSize + 0.5;                       // 0..1
+  float idx = uHead - (uFilled - 1.0) + q.z * (uFilled - 1.0);   // z=0 最舊，z=1 最新
+  return texture(uTex, vec3(q.x, 1.0 - q.y, (idx + 0.5) / uN)).rgb;
+}
+void main(){
+  if (uFilled < 1.0) discard;
+  vec3 ro = uCam, rd = normalize(vObj - uCam);
+  vec3 bmin = -uSize * 0.5, bmax = uSize * 0.5;
+  float zc = mix(bmin.z, bmax.z, uCut);
+
+  if (uMode < 0.5){
+    // 實心：只看切面之前的部分，打到的第一個表面就是答案
+    vec2 t = hitBox(ro, rd, bmin, vec3(bmax.xy, zc));
+    if (t.x >= t.y) discard;
+    vec3 p = ro + rd * (t.x + 1e-4);
+    vec3 c = sampleAt(p);
+    float shade = 1.0;
+    vec3 e = min(abs(p - bmin), abs(p - vec3(bmax.xy, zc)));
+    if (e.x < e.y && e.x < e.z) shade = 0.82; else if (e.y < e.z) shade = 0.9;   // 側面稍暗，看得出立體
+    outColor = vec4(c * shade, 1.0);
+  } else {
+    // 透明體積：每一幀是一片半透明的玻璃，依照離鏡頭的遠近，由前往後一片片疊上去
+    vec2 t = hitBox(ro, rd, bmin, bmax);
+    if (t.x >= t.y || abs(rd.z) < 1e-6) discard;
+    float cutIdx = floor(uCut * (uFilled - 1.0) + 0.5);
+    vec4 acc = vec4(0.0);
+    for (int k = 0; k < 120; k++){
+      if (float(k) >= uFilled) break;
+      // 鏡頭在前方時先畫新的幀，在後方時先畫舊的幀
+      float i = rd.z < 0.0 ? uFilled - 1.0 - float(k) : float(k);
+      bool isCut = i == cutIdx;
+      if (!isCut && mod(i, uStride) != 0.0) continue;
+      float z = uFilled > 1.0 ? mix(bmin.z, bmax.z, i / (uFilled - 1.0)) : bmax.z;
+      float tz = (z - ro.z) / rd.z;
+      if (tz < t.x - 1e-4 || tz > t.y + 1e-4) continue;
+      vec3 p = ro + rd * tz;
+      vec3 q = p / uSize + 0.5;
+      float idx = uHead - (uFilled - 1.0) + i;
+      vec3 c = texture(uTex, vec3(q.x, 1.0 - q.y, (idx + 0.5) / uN)).rgb;
+      float a = isCut ? uSliceA : uFrameA;
+      acc.rgb += (1.0 - acc.a) * c * a; acc.a += (1.0 - acc.a) * a;
+      if (acc.a > 0.995) break;
+    }
+    outColor = acc;
+  }
+}`;
+
+const LVS = `#version 300 es
+in vec3 aPos; uniform mat4 uMVP; uniform vec3 uSize; uniform float uCutZ;
+void main(){ vec3 p = aPos * uSize; if (aPos.z > 1.0) p.z = uCutZ; gl_Position = uMVP * vec4(p, 1.0); }`;
+const LFS = `#version 300 es
+precision mediump float; uniform vec4 uColor; out vec4 o; void main(){ o = uColor; }`;
+
+function program(vs, fs){
+  const mk = (t, s) => { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(sh); return sh; };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw gl.getProgramInfoLog(p);
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++){ const name = gl.getActiveUniform(p, i).name; u[name] = gl.getUniformLocation(p, name); }
+  return { p, u, a: gl.getAttribLocation(p, "aPos") };
+}
+
+let vol, lines, cubeBuf, idxBuf, lineBuf, edgeCount, tex;
+function initGL(){
+  vol = program(VS, FS); lines = program(LVS, LFS);
+  const v = [-.5,-.5,-.5, .5,-.5,-.5, .5,.5,-.5, -.5,.5,-.5, -.5,-.5,.5, .5,-.5,.5, .5,.5,.5, -.5,.5,.5];
+  const f = [0,1,2,0,2,3, 4,6,5,4,7,6, 0,4,5,0,5,1, 3,2,6,3,6,7, 0,3,7,0,7,4, 1,5,6,1,6,2];
+  cubeBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+  idxBuf = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(f), gl.STATIC_DRAW);
+  // 外框 12 條邊 + 切面的方框（z=2 代表「跟著切面位置」）
+  const E = [0,1,1,2,2,3,3,0, 4,5,5,6,6,7,7,4, 0,4,1,5,2,6,3,7];
+  const L = [];
+  for (const i of E) L.push(v[i*3], v[i*3+1], v[i*3+2]);
+  const C = [[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]];
+  for (let i = 0; i < 4; i++){ const a = C[i], b = C[(i+1)%4]; L.push(a[0],a[1],2, b[0],b[1],2); }
+  lineBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(L), gl.STATIC_DRAW);
+  edgeCount = E.length;
+}
+function initTexture(){
+  if (tex) gl.deleteTexture(tex);
+  tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA8, TW, TH, N, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.REPEAT);   // 環狀緩衝：最舊的幀被新的蓋掉
+  head = -1; filled = 0;
+}
+
+// ================= 擷取影格 =================
+const grab = document.createElement("canvas");
+const gctx = grab.getContext("2d", { willReadFrequently:true });
+let head = -1, filled = 0;
+function pushFrame(source, mirror){
+  gctx.save();
+  if (mirror){ gctx.translate(TW, 0); gctx.scale(-1, 1); }
+  gctx.drawImage(source, 0, 0, TW, TH); gctx.restore();
+  head = (head + 1) % N; filled = Math.min(N, filled + 1);
+  gl.bindTexture(gl.TEXTURE_3D, tex);
+  gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, head, TW, TH, 1, gl.RGBA, gl.UNSIGNED_BYTE, grab);
+}
+function setSize(w, h){
+  TH = Math.max(16, Math.round(TW * h / w));
+  grab.width = TW; grab.height = TH;
+  initTexture();
+}
+
+// ================= 視角操作 =================
+let yaw = 0.75, pitch = 0.32, dist = 3.3;
+const pointers = new Map(); let pinch0 = 0, dist0 = 0;
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if (pointers.size === 2){ const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a.x-b.x, a.y-b.y); dist0 = dist; } });
+canvas.addEventListener("pointermove", e => {
+  if (!pointers.has(e.pointerId)) return;
+  const p = pointers.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (pointers.size === 1){ yaw -= dx * 0.008; pitch = Math.max(-1.45, Math.min(1.45, pitch + dy * 0.008)); }
+  else if (pointers.size === 2){ const [a, b] = [...pointers.values()]; const d = Math.hypot(a.x-b.x, a.y-b.y); if (pinch0) dist = Math.max(1.4, Math.min(8, dist0 * pinch0 / d)); }
+});
+const up = e => { pointers.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+canvas.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(1.4, Math.min(8, dist * Math.exp(e.deltaY * 0.001))); }, { passive:false });
+
+// ================= 狀態 =================
+let source = null, video = null, stream = null, recording = true, solid = false, playing = false;
+let frameTick = 0, playT = 0, lastT = performance.now();
+
+function render(now){
+  const dt = (now - lastT) / 1000; lastT = now;
+  if (source === "cam" && recording && video.readyState >= 2){
+    if (frameTick++ % +$("every").value === 0) pushFrame(video, true);
+  }
+  if (playing){
+    playT += dt * 0.25;
+    const k = playT % 2; $("cut").value = Math.round((k < 1 ? k : 2 - k) * 1000);
+  }
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+  if (canvas.width !== w || canvas.height !== h){ canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(0.043, 0.047, 0.055, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  if (tex && filled){
+    const cut = $("cut").value / 1000;
+    const asp = TW / TH, sx = 1.5, size = [sx, sx / asp, $("depth").value / 100];
+    const cam = [dist*Math.cos(pitch)*Math.sin(yaw), dist*Math.sin(pitch), dist*Math.cos(pitch)*Math.cos(yaw)];
+    const mvp = mul(perspective(0.7, w / h, 0.05, 50), lookAt(cam, [0,0,0], [0,1,0]));
+
+    gl.enable(gl.CULL_FACE); gl.cullFace(gl.FRONT);               // 畫背面，鏡頭進到方塊裡也看得到
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(vol.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuf); gl.enableVertexAttribArray(vol.a); gl.vertexAttribPointer(vol.a, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_3D, tex);
+    gl.uniform1i(vol.u.uTex, 0);
+    gl.uniformMatrix4fv(vol.u.uMVP, false, mvp);
+    gl.uniform3fv(vol.u.uSize, size); gl.uniform3fv(vol.u.uCam, cam);
+    gl.uniform1f(vol.u.uCut, cut); gl.uniform1f(vol.u.uHead, head);
+    gl.uniform1f(vol.u.uFilled, filled); gl.uniform1f(vol.u.uN, N); gl.uniform1f(vol.u.uMode, solid ? 0 : 1);
+    gl.uniform1f(vol.u.uFrameA, $("frameA").value / 100); gl.uniform1f(vol.u.uSliceA, $("sliceA").value / 100); gl.uniform1f(vol.u.uStride, +$("stride").value);
+    gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+    gl.disable(gl.CULL_FACE);
+
+    gl.useProgram(lines.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER, lineBuf); gl.enableVertexAttribArray(lines.a); gl.vertexAttribPointer(lines.a, 3, gl.FLOAT, false, 0, 0);
+    gl.uniformMatrix4fv(lines.u.uMVP, false, mvp); gl.uniform3fv(lines.u.uSize, size);
+    gl.uniform1f(lines.u.uCutZ, (cut - 0.5) * size[2]);
+    gl.uniform4fv(lines.u.uColor, [0.35, 0.36, 0.4, 0.5]); gl.drawArrays(gl.LINES, 0, edgeCount);
+    gl.uniform4fv(lines.u.uColor, [0.5, 0.65, 1.0, 0.9]); gl.drawArrays(gl.LINES, edgeCount, 8);
+
+    const n = Math.max(1, Math.round(cut * (filled - 1)) + 1);
+    $("hud").textContent = `第 ${n} / ${filled} 幀` + (source === "cam" && recording ? "　錄製中" : "");
+  }
+  requestAnimationFrame(render);
+}
+
+// ================= 來源 =================
+function begin(kind){
+  source = kind;
+  document.body.classList.add("on");
+  $("rec").hidden = kind !== "cam"; $("stepRow").style.display = kind === "cam" ? "" : "none";
+  recording = true; $("rec").setAttribute("aria-pressed", "true"); $("rec").textContent = "錄製中";
+}
+$("cam").onclick = async () => {
+  $("msg").textContent = "";
+  try { stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user", width:{ ideal:640 } }, audio:false }); }
+  catch (e){ $("msg").textContent = "鏡頭沒有開啟：這個頁面可能沒有相機權限。可以改用上傳影片，或把網頁檔案直接用瀏覽器打開。"; return; }
+  video = document.createElement("video");
+  video.playsInline = true; video.muted = true; video.srcObject = stream;
+  await video.play();
+  setSize(video.videoWidth, video.videoHeight);
+  begin("cam");
+};
+$("file").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = "";
+  const v = document.createElement("video");
+  v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = URL.createObjectURL(f);
+  await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = rej; }).catch(() => null);
+  if (!v.videoWidth){ $("msg").textContent = "這個影片格式瀏覽器讀不了，換一支 mp4 試試。"; return; }
+  setSize(v.videoWidth, v.videoHeight);
+  begin("video");
+  // 平均地在整支影片裡取 N 幀
+  const dur = v.duration;
+  for (let i = 0; i < N; i++){
+    if (source !== "video") return;
+    await new Promise(res => { v.onseeked = res; v.currentTime = Math.min(dur - 0.01, dur * i / (N - 1)); });
+    pushFrame(v, false);
+    $("cut").value = 1000;
+  }
+};
+$("play").onclick = e => { playing = !playing; e.currentTarget.setAttribute("aria-pressed", playing); playT = $("cut").value / 1000; };
+$("mode").onclick = e => { solid = !solid; e.currentTarget.textContent = solid ? "透明體積" : "實心方塊"; document.body.classList.toggle("solid", solid); };
+$("frameA").oninput = e => { $("frameAv").textContent = e.target.value + "%"; };
+$("sliceA").oninput = e => { $("sliceAv").textContent = e.target.value + "%"; };
+$("stride").oninput = e => { $("strideV").textContent = "每 " + e.target.value + " 幀"; };
+$("rec").onclick = e => { recording = !recording; e.currentTarget.setAttribute("aria-pressed", recording); e.currentTarget.textContent = recording ? "錄製中" : "已暫停錄製"; };
+$("cut").oninput = () => { if (playing){ playing = false; $("play").setAttribute("aria-pressed", "false"); } };
+$("back").onclick = () => {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; source = null; filled = 0; $("hud").textContent = "";
+  document.body.classList.remove("on");
+};
+
+if (gl){ initGL(); requestAnimationFrame(render); }
+</script>
+</body>
+</html>
