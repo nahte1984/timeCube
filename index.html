@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TIMEcube</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Press+Start+2P&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zalando+Sans+Expanded:wght@200..900&display=swap">
 <style>
 :root{
   --bg:#E3E1DC; --ink:#1A1C1F; --faint:#77756F; --hit:#3D7BFF; --panel:rgba(227,225,220,.94); --line:rgba(26,28,31,.14);
@@ -20,7 +20,7 @@
 html,body{height:100%;margin:0}
 body{
   background:#0B0C0E; color:var(--ink);
-  font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-family:"Zalando Sans Expanded",system-ui,-apple-system,"Segoe UI",sans-serif;
   display:flex; flex-direction:column; overflow:hidden;
 }
 #stage{flex:1; min-height:0; position:relative}
@@ -29,20 +29,20 @@ body{
 #tc{position:absolute; inset:0; pointer-events:none; overflow:hidden}
 #tc span{
   position:absolute; left:0; top:0; white-space:nowrap; display:none;
-  font-family:"Press Start 2P","Courier New",monospace; font-size:8px; line-height:1; color:#606060;
+  font-family:"Zalando Sans Expanded",system-ui,sans-serif; font-weight:600; font-size:8px; line-height:1; color:#606060;
 }
 #intro{
   position:absolute; inset:0; background:#000; color:#fff;
   display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px;
-  font-family:"Press Start 2P","Courier New",monospace;
+  font-family:inherit;
 }
 #intro h1{
-  font-weight:400; font-size:clamp(24px,9vw,38px); line-height:47px; letter-spacing:.1em;
-  margin:0 0 34px; white-space:nowrap;
+  font-weight:600; font-size:clamp(30px,11.4vw,48px); line-height:47px; letter-spacing:.1em;
+  margin:0 0 27px; white-space:nowrap;
 }
 #intro #cam{
-  width:101px; height:34px; border-radius:5.6px; background:#fff; color:#313131; box-shadow:none;
-  font-family:inherit; font-size:15px; letter-spacing:.1em; padding:0 0 0 .1em;
+  width:124px; height:40px; border-radius:10px; background:#fff; color:#313131; box-shadow:none;
+  font-family:inherit; font-weight:900; font-size:20px; letter-spacing:.1em; padding:0 0 0 .1em;
 }
 #intro #cam:active{transform:translateY(1px)}
 #msg{color:#9a978f; min-height:1.4em; font-size:10px; line-height:1.8; margin:24px 0 0; max-width:28em; text-align:center}
