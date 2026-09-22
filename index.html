@@ -26,6 +26,11 @@ body{
 #stage{flex:1; min-height:0; position:relative}
 #gl{position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; display:block}
 #gl:active{cursor:grabbing}
+#tc{position:absolute; inset:0; pointer-events:none; overflow:hidden}
+#tc span{
+  position:absolute; left:0; top:0; white-space:nowrap; display:none;
+  font-family:"Press Start 2P","Courier New",monospace; font-size:8px; line-height:1; color:#606060;
+}
 #intro{
   position:absolute; inset:0; background:#000; color:#fff;
   display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px;
@@ -68,6 +73,7 @@ input[type=range]{flex:1; accent-color:var(--hit)}
 <body>
 <div id="stage">
   <canvas id="gl"></canvas>
+  <div id="tc"></div>
   <div id="intro">
     <h1>TIMEcube</h1>
     <button id="cam">START</button>
@@ -223,11 +229,13 @@ function initTexture(){
 const grab = document.createElement("canvas");
 const gctx = grab.getContext("2d", { willReadFrequently:true });
 let head = -1, filled = 0;
+const stamps = new Array(N).fill(0);           // 每一層是幾點幾分幾秒拍的
 function pushFrame(source, mirror){
   gctx.save();
   if (mirror){ gctx.translate(TW, 0); gctx.scale(-1, 1); }
   gctx.drawImage(source, 0, 0, TW, TH); gctx.restore();
   head = (head + 1) % N; filled = Math.min(N, filled + 1);
+  stamps[head] = Date.now();
   gl.bindTexture(gl.TEXTURE_3D, tex);
   gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, head, TW, TH, 1, gl.RGBA, gl.UNSIGNED_BYTE, grab);
 }
@@ -258,6 +266,35 @@ canvas.addEventListener("wheel", e => { e.preventDefault(); depth = Math.max(0.0
 // ================= 狀態 =================
 let mirrorCam = true, source = null, video = null, stream = null, recording = true, solid = false, playing = false;
 let frameTick = 0, playT = 0, lastT = performance.now();
+
+// ================= 頂點的 time code =================
+const tcBox = $("tc");
+const labels = Array.from({ length:8 }, () => { const s = document.createElement("span"); tcBox.appendChild(s); return s; });
+const CORNERS = [[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]];
+const hms = ms => { const d = new Date(ms); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(v => String(v).padStart(2, "0")).join(":"); };
+function project(m, p, cw, ch){
+  const x = m[0]*p[0] + m[4]*p[1] + m[8]*p[2] + m[12];
+  const y = m[1]*p[0] + m[5]*p[1] + m[9]*p[2] + m[13];
+  const w = m[3]*p[0] + m[7]*p[1] + m[11]*p[2] + m[15];
+  return w <= 0.01 ? null : [(x / w * 0.5 + 0.5) * cw, (0.5 - y / w * 0.5) * ch];
+}
+function placeLabels(mvp, size){
+  const cw = canvas.clientWidth, ch = canvas.clientHeight;
+  const newest = hms(stamps[head]);                                   // 最前面：最新的一幀
+  const oldest = hms(stamps[((head - filled + 1) % N + N) % N]);      // 最後面：最舊的一幀
+  const c = project(mvp, [0, 0, 0], cw, ch);
+  labels.forEach((el, i) => {
+    const front = i < 4, k = CORNERS[i % 4];
+    const s = project(mvp, [k[0]*size[0], k[1]*size[1], (front ? .5 : -.5)*size[2]], cw, ch);
+    if (!s || !c){ el.style.display = "none"; return; }
+    const txt = front ? newest : oldest;
+    if (el.textContent !== txt) el.textContent = txt;
+    // 標籤往方塊外側推一點，不壓在邊線上
+    const left = s[0] < c[0], above = s[1] < c[1];
+    el.style.transform = `translate(${s[0] + (left ? -4 : 4)}px, ${s[1] + (above ? -4 : 4)}px) translate(${left ? "-100%" : "0"}, ${above ? "-100%" : "0"})`;
+    el.style.display = "block";
+  });
+}
 
 function render(now){
   const dt = (now - lastT) / 1000; lastT = now;
@@ -301,6 +338,7 @@ function render(now){
     gl.uniform1f(lines.u.uCutZ, (cut - 0.5) * size[2]);
     gl.uniform4fv(lines.u.uColor, [0.35, 0.36, 0.4, 0.5]); gl.drawArrays(gl.LINES, 0, edgeCount);
     gl.uniform4fv(lines.u.uColor, [0.5, 0.65, 1.0, 0.9]); gl.drawArrays(gl.LINES, edgeCount, 8);
+    placeLabels(mvp, size);
 
   }
   requestAnimationFrame(render);
