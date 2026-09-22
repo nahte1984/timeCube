@@ -41,7 +41,7 @@ body{
   margin:0 0 34px; white-space:nowrap;
 }
 #intro #cam{
-  width:135px; height:45px; border-radius:7.5px; background:#fff; color:#313131; box-shadow:none;
+  width:101px; height:34px; border-radius:5.6px; background:#fff; color:#313131; box-shadow:none;
   font-family:inherit; font-size:15px; letter-spacing:.1em; padding:0 0 0 .1em;
 }
 #intro #cam:active{transform:translateY(1px)}
@@ -248,7 +248,7 @@ function setSize(w, h){
 // ================= 視角操作 =================
 let yaw = 0.75, pitch = 0.32, dist = 3.3;
 let depth = 1.1, depth0 = 1.1, cutV = 1;       // 厚度、切面（1 = 最前方）
-const FRAME_A = 0.20, SLICE_A = 0.65;           // 每幀 20%、切片 65%
+const FRAME_A = 0.10, SLICE_A = 0.45;           // 每幀 10%、切片 45%
 const pointers = new Map(); let pinch0 = 0, dist0 = 0;
 canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
   if (pointers.size === 2){ const [a, b] = [...pointers.values()]; pinch0 = Math.hypot(a.x-b.x, a.y-b.y); depth0 = depth; } });
