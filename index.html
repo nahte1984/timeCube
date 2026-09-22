@@ -83,7 +83,7 @@ input[type=range]{flex:1; accent-color:var(--hit)}
 
 <script>
 // ================= 設定 =================
-const N = 120;            // 疊幾幀（z 軸深度）
+const N = 240;            // 疊幾幀（z 軸深度）
 const TW = 192;           // 每幀的寬（像素）
 let TH = 144;
 
@@ -157,7 +157,7 @@ void main(){
     if (t.x >= t.y || abs(rd.z) < 1e-6) discard;
     float cutIdx = floor(uCut * (uFilled - 1.0) + 0.5);
     vec4 acc = vec4(0.0);
-    for (int k = 0; k < 120; k++){
+    for (int k = 0; k < 240; k++){
       if (float(k) >= uFilled) break;
       // 鏡頭在前方時先畫新的幀，在後方時先畫舊的幀
       float i = rd.z < 0.0 ? uFilled - 1.0 - float(k) : float(k);
@@ -271,7 +271,7 @@ let frameTick = 0, playT = 0, lastT = performance.now();
 const tcBox = $("tc");
 const labels = Array.from({ length:8 }, () => { const s = document.createElement("span"); tcBox.appendChild(s); return s; });
 const CORNERS = [[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]];
-const hms = ms => { const d = new Date(ms); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(v => String(v).padStart(2, "0")).join(":"); };
+const hms = ms => { const d = new Date(ms); return [d.getHours(), d.getMinutes(), d.getSeconds(), Math.floor(d.getMilliseconds() / 10)].map(v => String(v).padStart(2, "0")).join(":"); };
 function project(m, p, cw, ch){
   const x = m[0]*p[0] + m[4]*p[1] + m[8]*p[2] + m[12];
   const y = m[1]*p[0] + m[5]*p[1] + m[9]*p[2] + m[13];
